@@ -53,9 +53,9 @@ impl ClientConnection for HttpsClientConnection {
         _signer: Option<Arc<Signer>>,
     ) -> Self::SenderFuture {
         // TODO: maybe signer needs to be applied in https...
-        let https_builder =
-            HttpsClientStreamBuilder::with_client_config(Arc::new(self.client_config.clone()));
-        https_builder.build(self.name_server, self.dns_name.clone())
+        HttpsClientStreamBuilder::new()
+            .with_client_config(Arc::new(self.client_config.clone()))
+            .build(self.name_server, self.dns_name.clone())
     }
 }
 

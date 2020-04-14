@@ -32,6 +32,6 @@ pub use self::error::{Error as HttpsError, Result as HttpsResult};
 
 //pub use self::https_client_connection::{HttpsClientConnection, HttpsClientConnectionBuilder};
 pub use self::https_client_stream::{
-    HttpsClientConnect, HttpsClientResponse, HttpsClientStream, HttpsClientStreamBuilder,
+    Dialer, HttpsClientConnect, HttpsClientResponse, HttpsClientStream, HttpsClientStreamBuilder,
 };
 //pub use self::https_stream::{HttpsStream, HttpsStreamBuilder};

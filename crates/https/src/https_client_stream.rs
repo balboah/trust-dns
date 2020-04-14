@@ -5,6 +5,7 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
+use std::fmt::Debug;
 use std::fmt::{self, Display};
 use std::io;
 use std::mem;
@@ -284,26 +285,45 @@ impl Stream for HttpsClientStream {
     }
 }
 
+// Dialer can be used to customize how new streams are made.
+pub trait Dialer: Send + Sync + Debug {
+    fn dial(&self, addr: SocketAddr) -> Pin<Box<dyn Future<Output = TokioTcpStream>>>;
+}
+
 /// A HTTPS connection builder for DNS-over-HTTPS
 #[derive(Clone)]
 pub struct HttpsClientStreamBuilder {
     client_config: Arc<ClientConfig>,
+    dialer: Option<Arc<dyn Dialer>>,
 }
 
 impl HttpsClientStreamBuilder {
-    /// Return a new builder for DNS-over-HTTPS
+    /// Return a new builder for DNS-over-HTTPS with default config
     pub fn new() -> HttpsClientStreamBuilder {
         let mut client_config = ClientConfig::new();
         client_config.alpn_protocols.push(ALPN_H2.to_vec());
 
         HttpsClientStreamBuilder {
             client_config: Arc::new(client_config),
+            dialer: None,
         }
     }
 
-    /// Constructs a new TlsStreamBuilder with the associated ClientConfig
-    pub fn with_client_config(client_config: Arc<ClientConfig>) -> Self {
-        HttpsClientStreamBuilder { client_config }
+    /// Override the default ClientConfig
+    pub fn with_client_config(mut self, client_config: Arc<ClientConfig>) -> Self {
+        assert!(client_config
+            .alpn_protocols
+            .iter()
+            .any(|protocol| *protocol == ALPN_H2.to_vec()));
+
+        self.client_config = client_config;
+        self
+    }
+
+    // Customize the dialer used for making new connections
+    pub fn with_dialer(mut self, dialer: Arc<dyn Dialer>) -> Self {
+        self.dialer = Some(dialer);
+        self
     }
 
     /// Creates a new HttpsStream to the specified name_server
@@ -314,12 +334,6 @@ impl HttpsClientStreamBuilder {
     /// * `dns_name` - The DNS name, Subject Public Key Info (SPKI) name, as associated to a certificate
     /// * `loop_handle` - The reactor Core handle
     pub fn build(self, name_server: SocketAddr, dns_name: String) -> HttpsClientConnect {
-        assert!(self
-            .client_config
-            .alpn_protocols
-            .iter()
-            .any(|protocol| *protocol == ALPN_H2.to_vec()));
-
         let tls = TlsConfig {
             client_config: self.client_config,
             dns_name: Arc::new(dns_name),
@@ -328,6 +342,7 @@ impl HttpsClientStreamBuilder {
         HttpsClientConnect(HttpsClientConnectState::ConnectTcp {
             name_server,
             tls: Some(tls),
+            dialer: self.dialer,
         })
     }
 }
@@ -360,6 +375,7 @@ enum HttpsClientConnectState {
     ConnectTcp {
         name_server: SocketAddr,
         tls: Option<TlsConfig>,
+        dialer: Option<Arc<dyn Dialer>>,
     },
     TcpConnecting {
         connect: Pin<Box<dyn Future<Output = io::Result<TokioTcpStream>> + Send>>,
@@ -402,8 +418,10 @@ impl Future for HttpsClientConnectState {
                 HttpsClientConnectState::ConnectTcp {
                     name_server,
                     ref mut tls,
+                    ref dialer,
                 } => {
                     debug!("tcp connecting to: {}", name_server);
+                    // TODO: match dialer
                     let connect = Box::pin(TokioTcpStream::connect(name_server));
                     HttpsClientConnectState::TcpConnecting {
                         connect,
@@ -546,7 +564,8 @@ mod tests {
         client_config.versions = versions;
         client_config.alpn_protocols.push(ALPN_H2.to_vec());
 
-        let https_builder = HttpsClientStreamBuilder::with_client_config(Arc::new(client_config));
+        let https_builder =
+            HttpsClientStreamBuilder::new().with_client_config(Arc::new(client_config));
         let connect = https_builder.build(google, "dns.google".to_string());
 
         // tokio runtime stuff...

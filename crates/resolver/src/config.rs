@@ -10,14 +10,13 @@
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::ops::{Deref, DerefMut};
-use std::time::Duration;
-
-#[cfg(feature = "dns-over-rustls")]
 use std::sync::Arc;
+use std::time::Duration;
 
 use proto::rr::Name;
 #[cfg(feature = "dns-over-rustls")]
 use rustls::ClientConfig;
+use trust_dns_https::Dialer;
 
 #[cfg(all(feature = "serde-config", feature = "dns-over-rustls"))]
 use serde::{

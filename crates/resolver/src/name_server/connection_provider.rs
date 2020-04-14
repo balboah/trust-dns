@@ -170,9 +170,15 @@ where
                 let tls_dns_name = config.tls_dns_name.clone().unwrap_or_default();
                 #[cfg(feature = "dns-over-rustls")]
                 let client_config = config.tls_config.clone();
-
-                let exchange =
-                    crate::https::new_https_stream(socket_addr, tls_dns_name, client_config);
+                // TODO: where do we get the dialer from?
+                // Config objects require serialization and copy traits.
+                let dialer = None;
+                let exchange = crate::https::new_https_stream(
+                    socket_addr,
+                    tls_dns_name,
+                    client_config,
+                    dialer,
+                );
                 ConnectionConnect::Https(exchange)
             }
             #[cfg(feature = "mdns")]
